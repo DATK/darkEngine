@@ -3,7 +3,7 @@ import math
 import random
 import os
 import numpy as np
- 
+
  
  
 class ImageLoader:
@@ -47,8 +47,10 @@ class Vector2:
             self.y *= inv_length
             
     def getRandomDir(self):
-        self.x=random.randint(-1,1)
-        self.y=random.randint(-1,1)
+        tmpX=random.randint(1,10)/10
+        tmpY=random.randint(1,10)/10
+        self.x=random.randint(-1,1)+tmpX
+        self.y=random.randint(-1,1)+tmpY
         
     def __add__(self,other): 
         if isinstance(other,Vector2):
@@ -109,16 +111,33 @@ class Vector2:
     def __str__(self):
         return f"({round(self.x,2)},{round(self.y,2)})"
     
+
+class ImageObject:
     
+    def __init__(self,startPosition=(0,0)):
+        self.Width=0
+        self.Height=0
+        self.Enabled=True
+        self.Position = Vector2(startPosition[0],startPosition[1])
+        
+    def Load_Image(self,img: pg.Surface):
+       self.Sprite=pg.transform.scale(img,(self.Width,self.Height))
+    
+    def Update(self):
+        DarkEngine.window.blit(self.Sprite,(self.Position.x,self.Position.y))
+        
+    def Start(self):
+        return 
 
     
 class GameObject:
     
-    def __init__(self):
+    
+    def __init__(self,startPosition=(0,0)):
         self.Width=0
         self.Height=0
         self.Enabled=True
-        self.Position = Vector2(0,0)
+        self.Position = Vector2(startPosition[0],startPosition[1])
         self.Colider=pg.Rect(-1000,-1000,-1000,-1000)
         self.Drawing=False
         
@@ -155,10 +174,13 @@ class Player(GameObject):
     
     def Start(self):
         self.Position=Vector2(200,200)
-        self.speed=8
+        self.speed=20
         self.Height=50
         self.rot=False
+        self.pl=True
         self.Width=50
+        self.SpriteReverse=pg.transform.rotate(imageload.load("hero.png",colorkey=[1,(255,255,255)]),180)
+        self.MainSprite=imageload.load("hero.png",colorkey=[1,(255,255,255)])
         self.Set_Sprite(imageload.load("hero.png",colorkey=[1,(255,255,255)]))
         super().Start()
     
@@ -166,6 +188,11 @@ class Player(GameObject):
         if super().OnColliderCurrent(colider):
             self.x,self.y=0,0
    
+    def reverse(self):
+        if pg.mouse.get_pos()[0]>self.Position.x:
+            self.Set_Sprite(self.MainSprite)
+        else:
+            self.Set_Sprite(self.SpriteReverse)
     
     def Movement(self):
         keys=DarkEngine.keys
@@ -183,17 +210,36 @@ class Player(GameObject):
 
     
     def Update(self):
+        self.reverse()
         self.Movement()
         super().Update()
 
+class Phone(ImageObject):
+    
+    def __init__(self,statpos):
+        super().__init__(statpos)
+    
+    def Start(self):
+        self.speed=30
+        self.Width,self.Height=DarkEngine.windowSize
+        #self.Width*=2
+        self.Load_Image(imageload.load("phone2.png"))
+        return super().Start()
+    
+    def Update(self):
+        self.Position.x-=self.speed*DarkEngine.deltaTime
+        if self.Position.x <= -self.Width:
+            self.Position.x=DarkEngine.windowSize[0]
+        super().Update()
     
 class tmpObject(GameObject):
     
     def Start(self):
         self.Position=Vector2(300,300)
-        self.Width=120
-        self.Height=110
+        self.Width=70
+        self.Height=60
         self.Enabled=True
+        self.pl=False
         self.gen_point()
         self.speed=random.randint(2,20)
         self.Set_Sprite(imageload.load("enemy2.png",colorkey=[1,(255,255,255)]))
@@ -218,7 +264,10 @@ class tmpObject(GameObject):
     
     def OnColliderCurrent(self, object):
         if super().OnColliderCurrent(object):
-            pass
+            if object.pl:
+                self.Enabled=False
+
+                
     
     
 
@@ -233,17 +282,22 @@ class DarkEngineLoop:
         self.fps_now=144
         self.deltaTime=0
         self.objects=np.array([],dtype=GameObject)
+        self.images=np.array([],dtype=ImageObject)
         self.keys=pg.key.get_pressed()
         self.windowSize=self.window.get_size()
         self.defaultFont = pg.font.SysFont('Comic Sans MS', 25)
+        self.objectsCords=np.array([],float)
         
         #16120
     def LoadObject(self,obj: object):
         self.objects=np.append(obj,self.objects)
 
+    def LoadImage(self,img):
+        self.images=np.append(img,self.images)
+
     def Set_icon(self,image):
         pg.display.set_icon(image)
-        
+
     def set_frame(self, fps):
         self.fps_max = fps
 
@@ -258,8 +312,13 @@ class DarkEngineLoop:
         pg.display.update(pg.Rect(0,0,self.window.get_width(),self.window.get_height()))
         pg.time.wait(2000)
     
+    def GeneratingPositioForDraw(self):
+        pass
+    
     def run(self):
         self.startScene()  
+        for img in self.images:
+            img.Start()
         for obj in self.objects:
             obj.Start()
         while True:
@@ -273,6 +332,11 @@ class DarkEngineLoop:
             #     for obj2 in self.objects:
             #         if (obj.Drawing and obj.Enabled) and (obj2.Drawing and obj2.Enabled):
             #             obj.OnColliderCurrent(obj2)
+            
+            for imgI in np.arange(len(self.images)):
+                if self.images[imgI].Enabled:
+                    self.images[imgI].Update()
+            
             for objI in np.arange(len(self.objects)):
                 if self.objects[objI].Enabled:
                     self.objects[objI].Update()
@@ -280,9 +344,8 @@ class DarkEngineLoop:
                         if self.objects[objJ].Drawing and self.objects[objJ].Enabled:
                             self.objects[objJ].OnColliderCurrent(self.objects[objI])
                             self.objects[objI].OnColliderCurrent(self.objects[objJ])
-                            break
-                
-            
+
+
             
             [pg.quit() for event in pg.event.get() if event.type==pg.QUIT]
                     
@@ -302,9 +365,15 @@ imageload=ImageLoader()
 player=Player()
 
 
-DarkEngine.LoadObject(player)
-[DarkEngine.LoadObject(tmpObject()) for i in np.arange(20)]
 
+phone1=Phone((0,0))
+phone2=Phone((DarkEngine.windowSize[0],0))
+
+
+DarkEngine.LoadObject(player)
+[DarkEngine.LoadObject(tmpObject()) for i in np.arange(500)]
+DarkEngine.LoadImage(phone1)
+DarkEngine.LoadImage(phone2)
 
 
 
