@@ -126,6 +126,7 @@ class ImageObject:
         self.Height=0
         self.Enabled=True
         self.Position = Vector2(startPosition[0],startPosition[1])
+        DarkEngine.LoadImage(self)
         
     def Load_Image(self,img: pg.Surface):
        self.Sprite=pg.transform.scale(img,(self.Width,self.Height))
@@ -139,6 +140,7 @@ class ImageObject:
     
 class GameObject:
     
+    
     def __init__(self,startPosition=(0,0)):
         self.Width=0
         self.Height=0
@@ -148,6 +150,7 @@ class GameObject:
         self.ColiderChek=False
         self.Drawing=False
         self.CanGarbage=True
+        DarkEngine.LoadObject(self)
         
     def OnGarbage(self):
         return
