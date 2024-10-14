@@ -149,6 +149,9 @@ class GameObject:
         self.Drawing=False
         self.CanGarbage=True
         
+    def OnGarbage(self):
+        return
+    
     def Rotation(self,angle):
         self.Sprite=pg.transform.rotate(self.Sprite,angle)
     
@@ -246,6 +249,7 @@ class DarkEngineLoop:
         self.objects.remove(obj)
         if obj.Colider in self.coliderList:
             self.coliderList.remove(obj.Colider)
+        obj.OnGarbage()
         return False
         
     def RemoveFromGarbage(self,obj: GameObject):
