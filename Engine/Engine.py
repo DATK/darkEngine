@@ -189,8 +189,6 @@ class GameObject:
             DarkEngine.window.blit(self.Sprite,(self.Position.x,self.Position.y))
 
 
-    
-
                 
 
 class DarkEngineLoop:
@@ -207,11 +205,14 @@ class DarkEngineLoop:
         self.images=[]
         self.coliderList=[]
         self.ColiderListBuffer=[]
+        self.GarbageList=[]
+        self.IsInput=False
+        self.InputText=""
         self.keys=pg.key.get_pressed()
         self.windowSize=self.window.get_size()
         self.defaultFont = pg.font.SysFont('Comic Sans MS', 25)
         self.TargetColiderFunction=self.ColiderChek_Default
-        self.GarbageList=[]
+        
         
         #16120
     def LoadObject(self,obj: object):
@@ -260,6 +261,22 @@ class DarkEngineLoop:
             self.objects.append(obj)
             if obj.ColiderChek: self.coliderList.append(obj.Colider)
             self.GarbageList.remove(obj)
+    
+    def InputStart(self):
+        self.IsInput=True
+    
+    def InputStop(self):
+        self.IsInput=False
+        return self.InputText
+    
+    def InputClear(self):
+        self.InputText=""
+
+    def InputGet(self):
+        return self.InputText
+    
+    def InputDelLast(self):
+        self.InputText=self.InputText[0:len(self.InputText)-1]
     
     def startScene(self):
         self.window.fill((0,0,0))
@@ -344,14 +361,16 @@ class DarkEngineLoop:
                     if obj.ColiderChek: self.TargetColiderFunction(obj)
 
             
-            [pg.quit() for event in pg.event.get() if event.type==pg.QUIT]
+            for event in pg.event.get():
+                if event.type==pg.QUIT:
+                    pg.quit() 
+                elif self.InputText:
+                    if event.type==pg.KEYDOWN:
+                        self.InputText+=event.unicode
                     
             text=self.defaultFont.render(str(int(self.Clock.get_fps())),True,(255,255,255))############# TMP ПОТОМ УДАЛИТЬ
             self.window.blit(text,(0,0))                                                   ############# TMP ПОТОМ УДАЛИТЬ
             self.Clock.tick(self.fps_max)
             pg.display.update(pg.Rect(0,0,self.window.get_width(),self.window.get_height()))
-
-
-
 
 DarkEngine = DarkEngineLoop()
