@@ -10,9 +10,8 @@ class Player(GameObject):
         self.Position=Vector2(200,200)
         self.speed=20
         self.Height=50
-        self.rot=False
-        self.pl=True
         self.Width=50
+        self.CanGarbage=True
         self.SpriteReverse=pg.transform.rotate(imageload.load("hero.png",colorkey=[1,(255,255,255)]),180)
         self.MainSprite=imageload.load("hero.png",colorkey=[1,(255,255,255)])
         self.Set_Sprite(imageload.load("hero.png",colorkey=[1,(255,255,255)]))
@@ -22,6 +21,10 @@ class Player(GameObject):
     def OnColliderCurrent(self, colider):
         return super().OnColliderCurrent(colider) 
             
+    def OnGarbage(self):
+        self.MovePosition(Vector2(100,100))
+        DarkEngine.RemoveFromGarbage(self)
+        return super().OnGarbage()
    
     def reverse(self):
         if pg.mouse.get_pos()[0]>self.Position.x:
@@ -46,6 +49,16 @@ class Player(GameObject):
             DarkEngine.Set_WithBufferColiderChek()    ####
         elif keys[pg.K_3]:                            ####
             DarkEngine.Set_WithOutBufferColiderChek() ####
+        elif keys[pg.K_4]:                            ####
+            DarkEngine.InputStart()                   ####  FOR DEBUG
+        elif keys[pg.K_5]:                            ####
+            DarkEngine.InputStop()                    ####
+        elif keys[pg.K_6]:                            ####
+            DarkEngine.InputClear()                   ####
+        elif keys[pg.K_7]:                            ####  FOR DEBUG
+            DarkEngine.InputDelLast()                 ####
+        elif keys[pg.K_8]:                            ####  
+            print(DarkEngine.InputGet())              ####
         inputVector.normalise()
         self.MovePosition(self.Position+inputVector*(self.speed*DarkEngine.deltaTime))
 
@@ -130,22 +143,13 @@ player=Player()
 phone1=Phone((0,0))
 phone2=Phone((DarkEngine.windowSize[0],0))
 
-# bullets=[Bullet(10,2) for i in range(300)]
-
-# weapon = Weapon((player.Position.x,player.Position.y),1,(-1,1),1,player)
-# weapon.load_Bullets(bullets,1)
-
-# for i in bullets:
-#     DarkEngine.LoadObject(i)
 
 DarkEngine.LoadObject(player)
-[DarkEngine.LoadObject(Enemy()) for i in np.arange(1)]
-DarkEngine.LoadImage(phone1)
-DarkEngine.LoadImage(phone2)
-DarkEngine.LoadObject(Printer())
-#DarkEngine.LoadObject(weapon)
+[Enemy() for i in np.arange(100)]
 
+Printer()
 
+print(player,DarkEngine.objects[0])
 
 DarkEngine.Set_frame(60)
 
