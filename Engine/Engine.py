@@ -3,7 +3,7 @@ import math
 import random
 import os
 import numpy as np
-import numba
+
  
  
 class ImageLoader:
@@ -51,7 +51,14 @@ class Vector2:
         tmpY=random.randint(1,10)/10
         self.x=random.randint(-1,1)+tmpX
         self.y=random.randint(-1,1)+tmpY
-        
+    
+    def update(self,x: float,y: float):
+        self.x=x
+        self.y=y
+    
+    def updateWithVector(self,Vector):
+        self.x,self.y=Vector.x,Vector.y
+    
     def __add__(self,other): 
         if isinstance(other,Vector2):
             x=self.x+other.x
@@ -132,7 +139,6 @@ class ImageObject:
     
 class GameObject:
     
-    
     def __init__(self,startPosition=(0,0)):
         self.Width=0
         self.Height=0
@@ -141,6 +147,7 @@ class GameObject:
         self.Colider=pg.Rect(-1000,-1000,-1000,-1000)
         self.ColiderChek=False
         self.Drawing=False
+        self.CanGarbage=True
         
     def Rotation(self,angle):
         self.Sprite=pg.transform.rotate(self.Sprite,angle)
@@ -164,8 +171,7 @@ class GameObject:
         return 
     
     def MovePosition(self,NewPosition: Vector2):
-        self.Position.x=NewPosition.x
-        self.Position.y=NewPosition.y
+        self.Position.updateWithVector(NewPosition)
     
     def OnColliderCurrent(self,object):
         return False
@@ -176,107 +182,7 @@ class GameObject:
             self.Colider.update(self.Position.x,self.Position.y,self.Sprite.get_width(),self.Sprite.get_height())
             DarkEngine.window.blit(self.Sprite,(self.Position.x,self.Position.y))
 
-class Player(GameObject):
-    
-    def Start(self):
-        self.Position=Vector2(200,200)
-        self.speed=20
-        self.Height=50
-        self.rot=False
-        self.pl=True
-        self.Width=50
-        self.SpriteReverse=pg.transform.rotate(imageload.load("hero.png",colorkey=[1,(255,255,255)]),180)
-        self.MainSprite=imageload.load("hero.png",colorkey=[1,(255,255,255)])
-        self.Set_Sprite(imageload.load("hero.png",colorkey=[1,(255,255,255)]))
-        self.AddSelfColider()
-        super().Start()
-    
-    def OnColliderCurrent(self, colider):
-        return super().OnColliderCurrent(colider) 
-            
-   
-    def reverse(self):
-        if pg.mouse.get_pos()[0]>self.Position.x:
-            self.Set_Sprite(self.MainSprite)
-        else:
-            self.Set_Sprite(self.SpriteReverse)
-    
-    def Movement(self):
-        keys=DarkEngine.keys
-        inputVector = Vector2(0,0)
-        if keys[pg.K_w]:
-            inputVector.y-=1
-        if keys[pg.K_s]:
-            inputVector.y+=1
-        if keys[pg.K_a]:
-           inputVector.x-=1
-        if keys[pg.K_d]:
-            inputVector.x+=1
-        if keys[pg.K_1]:                              ####
-            DarkEngine.Set_DefaultColiderFunc()       ####
-        elif keys[pg.K_2]:                            ####  FOR DEBUG  
-            DarkEngine.Set_WithBufferColiderChek()    ####
-        elif keys[pg.K_3]:                            ####
-            DarkEngine.Set_WithOutBufferColiderChek() ####
-        inputVector.normalise()
-        self.MovePosition(self.Position+inputVector*(self.speed*DarkEngine.deltaTime))
 
-    
-    def Update(self):
-        self.reverse()
-        self.Movement()
-        super().Update()
-
-class Phone(ImageObject):
-    
-    def __init__(self,statpos):
-        super().__init__(statpos)
-    
-    def Start(self):
-        self.speed=30
-        self.Width,self.Height=DarkEngine.windowSize
-        #self.Width*=2
-        self.Load_Image(imageload.load("phone2.png"))
-        return super().Start()
-    
-    def Update(self):
-        self.Position.x-=self.speed*DarkEngine.deltaTime
-        if self.Position.x <= -self.Width:
-            self.Position.x=DarkEngine.windowSize[0]
-        super().Update()
-    
-class tmpObject(GameObject):
-    
-    def Start(self):
-        self.Position=Vector2(random.randint(0,DarkEngine.windowSize[0]),random.randint(0,DarkEngine.windowSize[1]))
-        self.Width=70
-        self.Height=60
-        self.Enabled=True
-        self.gen_point()
-        self.speed=random.randint(2,20)
-        self.Set_Sprite(imageload.load("enemy2.png",colorkey=[1,(255,255,255)]))
-        self.AddSelfColider()
-        return super().Start()
-    
-    def gen_point(self):
-        randVector=Vector2(0,0)
-        randVector.getRandomDir()
-        self.target=self.Position+randVector*random.randint(10,15)
-        self.dif=self.Position-self.target
-        self.dif.normalise()
-
-    def Update(self):
-        self.MovePosition(self.Position+self.dif*(self.speed*DarkEngine.deltaTime))
-        if self.Position==self.target:
-            self.speed=0
-            self.gen_point()
-        if self.Position.x<0 or self.Position.x>1200 or self.Position.y>700 or self.Position.y<0:
-            self.Position=Vector2(random.randint(0,DarkEngine.windowSize[0]),random.randint(0,DarkEngine.windowSize[1]))
-            self.gen_point()
-        super().Update()
-        
-    def OnColliderCurrent(self, object):
-        return super().OnColliderCurrent(object) 
     
 
                 
@@ -285,8 +191,8 @@ class DarkEngineLoop:
     
     def __init__(self):
         pg.init()
-        flags = pg.DOUBLEBUF 
-        self.window = pg.display.set_mode((1280,720),flags)
+        self.flags = pg.DOUBLEBUF 
+        self.window = pg.display.set_mode((1280,720),self.flags)
         self.Clock = pg.time.Clock()
         self.fps_max=240
         self.fps_now=144
@@ -299,6 +205,7 @@ class DarkEngineLoop:
         self.windowSize=self.window.get_size()
         self.defaultFont = pg.font.SysFont('Comic Sans MS', 25)
         self.TargetColiderFunction=self.ColiderChek_Default
+        self.GarbageList=[]
         
         #16120
     def LoadObject(self,obj: object):
@@ -313,14 +220,45 @@ class DarkEngineLoop:
     def Set_icon(self,image):
         pg.display.set_icon(image)
 
-    def set_frame(self, fps):
+    def Set_frame(self, fps):
         self.fps_max = fps
-
+    
+    def Set_caption(self,caption):
+        pg.display.set_caption(caption)
+    
+    def Set_resolution(self,res,fullsceen=False):
+        if fullsceen:
+            self.flags = pg.FULLSCREEN | pg.DOUBLEBUF
+        self.window=pg.display.set_mode(res,self.flags)
+        self.windowSize=self.window.get_size()
+    
+    def Set_resolutionCustom(self,res,flags):
+        self.flags=flags
+        self.window=pg.display.set_mode(res,self.flags)
+        self.windowSize=self.window.get_size()
+    
+    def GarbageStore(self,obj):
+        if not obj.CanGarbage:
+            return True
+        if -100<obj.Position.x<self.windowSize[0]+100 and -100<obj.Position.y<self.windowSize[1]+100:
+            return True
+        self.GarbageList.append(obj)
+        self.objects.remove(obj)
+        if obj.Colider in self.coliderList:
+            self.coliderList.remove(obj.Colider)
+        return False
+        
+    def RemoveFromGarbage(self,obj: GameObject):
+        if obj in self.GarbageList:
+            self.objects.append(obj)
+            if obj.ColiderChek: self.coliderList.append(obj.Colider)
+            self.GarbageList.remove(obj)
+    
     def startScene(self):
         self.window.fill((0,0,0))
         font = pg.font.SysFont('Comic Sans MS', 140)
         font2 = pg.font.SysFont('Comic Sans MS', 100)
-        text = font.render("DarkEngine",True,(255,255,255))
+        text = font.render("PyEngine",True,(255,255,255))
         text2 = font2.render("by Python3",True,(255,255,255))
         self.window.blit(text,(self.windowSize[0]*0.2,self.windowSize[1]*0.2))
         self.window.blit(text2,(self.windowSize[0]*0.2,self.windowSize[1]*0.45))
@@ -329,7 +267,8 @@ class DarkEngineLoop:
     
     def ColiderChek_Default(self,obj: GameObject):
         rect=obj.Colider.collidelistall(self.coliderList)
-        myindex=self.objects.index(obj)  
+        myindex=self.coliderList.index(obj.Colider)  
+        #myindexrect=self.coliderList.index(obj.Colider)  
         rect.remove(myindex)
         if rect!=[]:
             for i in rect:
@@ -341,7 +280,7 @@ class DarkEngineLoop:
             self.ColiderListBuffer.remove(obj)
             return
         rect=obj.Colider.collidelistall(self.coliderList)
-        myindex=self.objects.index(obj)  
+        myindex=self.coliderList.index(obj.Colider) 
         rect.remove(myindex)
         if rect!=[]:
             for i in rect:
@@ -355,7 +294,7 @@ class DarkEngineLoop:
                     
     def ColiderChek_WithoutBuffer(self,obj: GameObject):
         rect=obj.Colider.collidelistall(self.coliderList)
-        myindex=self.objects.index(obj)  
+        myindex=self.coliderList.index(obj.Colider)
         rect.remove(myindex)
         if rect!=[]:
             for i in rect:
@@ -376,7 +315,7 @@ class DarkEngineLoop:
     def Set_WithOutBufferColiderChek(self):
         self.TargetColiderFunction=self.ColiderChek_WithoutBuffer
         self.ColiderListBuffer.clear()
-        
+    
     def run(self):
         self.startScene()  
         for img in self.images:
@@ -393,7 +332,7 @@ class DarkEngineLoop:
                     self.images[imgI].Update()
             
             for obj in self.objects:
-                if obj.Enabled:
+                if obj.Enabled and self.GarbageStore(obj):
                     obj.Update()
                     if obj.ColiderChek: self.TargetColiderFunction(obj)
 
@@ -404,30 +343,8 @@ class DarkEngineLoop:
             self.window.blit(text,(0,0))                                                   ############# TMP ПОТОМ УДАЛИТЬ
             self.Clock.tick(self.fps_max)
             pg.display.update(pg.Rect(0,0,self.window.get_width(),self.window.get_height()))
-            
+
 
 
 
 DarkEngine = DarkEngineLoop()
-imageload=ImageLoader()
-
-player=Player()
-
-
-
-phone1=Phone((-300,0))
-phone2=Phone((DarkEngine.windowSize[0],0))
-
-
-DarkEngine.LoadObject(player)
-[DarkEngine.LoadObject(tmpObject()) for i in np.arange(1000)]
-DarkEngine.LoadImage(phone1)
-DarkEngine.LoadImage(phone2)
-
-
-
-
-#DarkEngine.Set_DefaultColiderFunc()
-#DarkEngine.Set_WithBufferColiderChek()
-#DarkEngine.Set_WithOutBufferColiderChek()
-DarkEngine.run()
