@@ -151,7 +151,7 @@ class GameObject:
         self.Drawing=False
         self.CanGarbage=True
         DarkEngine.LoadObject(self)
-        
+          
     def OnGarbage(self):
         return
     
@@ -213,8 +213,12 @@ class DarkEngineLoop:
         self.defaultFont = pg.font.SysFont('Comic Sans MS', 25)
         self.TargetColiderFunction=self.ColiderChek_Default
         
+    def ClearGarbage(self):
+        self.GarbageList.clear()
         
-        #16120
+    def ClearColiderBufer(self):
+        self.ColiderListBuffer.clear()
+        
     def LoadObject(self,obj: object):
         self.objects.append(obj)
 
@@ -262,6 +266,10 @@ class DarkEngineLoop:
             if obj.ColiderChek: self.coliderList.append(obj.Colider)
             self.GarbageList.remove(obj)
     
+    def AddToGarbage(self,obj):
+        self.GarbageList.append(obj)
+        self.objects.remove(obj)
+    
     def InputStart(self):
         self.IsInput=True
     
@@ -278,6 +286,8 @@ class DarkEngineLoop:
     def InputDelLast(self):
         self.InputText=self.InputText[0:len(self.InputText)-1]
     
+        
+    
     def startScene(self):
         self.window.fill((0,0,0))
         font = pg.font.SysFont('Comic Sans MS', 140)
@@ -293,12 +303,23 @@ class DarkEngineLoop:
         rect=obj.Colider.collidelistall(self.coliderList)
         myindex=self.coliderList.index(obj.Colider)  
         #myindexrect=self.coliderList.index(obj.Colider)  
-        rect.remove(myindex)
+        rect.remove(myindex)                                  # BAAD
         if rect!=[]:
             for i in rect:
                 if obj.OnColliderCurrent(self.objects[i]):
                     break
-                
+
+    def ColiderChek_WithoutBuffer(self,obj: GameObject):
+        rect=obj.Colider.collidelistall(self.coliderList)
+        myindex=self.coliderList.index(obj.Colider)
+        rect.remove(myindex)
+        if rect!=[]:
+            for i in rect:                                      # BAAD
+                if obj.OnColliderCurrent(self.objects[i]):
+                    break
+            for i in rect:
+                    self.objects[i].OnColliderCurrent(obj)  
+              
     def ColiderChek_WithBuffer(self,obj: GameObject):
         if obj in self.ColiderListBuffer:
             self.ColiderListBuffer.remove(obj)
@@ -307,7 +328,7 @@ class DarkEngineLoop:
         myindex=self.coliderList.index(obj.Colider) 
         rect.remove(myindex)
         if rect!=[]:
-            for i in rect:
+            for i in rect:                                      # BAAD
                 if obj.OnColliderCurrent(self.objects[i]):
                     break
             self.ColiderListBuffer.append(obj)
@@ -315,17 +336,26 @@ class DarkEngineLoop:
                 if self.objects[i] not in self.ColiderListBuffer:
                     self.objects[i].OnColliderCurrent(obj)  
                     self.ColiderListBuffer.append(self.objects[i])
-                    
-    def ColiderChek_WithoutBuffer(self,obj: GameObject):
-        rect=obj.Colider.collidelistall(self.coliderList)
-        myindex=self.coliderList.index(obj.Colider)
-        rect.remove(myindex)
-        if rect!=[]:
-            for i in rect:
-                if obj.OnColliderCurrent(self.objects[i]):
+                                        
+    def ColiderChek_WithBufferOther(self,obj):
+        if obj in self.ColiderListBuffer:
+            self.ColiderListBuffer.remove(obj)
+            return
+        self.ColiderListBuffer.append(obj)
+        for colider in self.objects:
+            if colider==obj:
+                continue
+            if colider in self.ColiderListBuffer:        # GOOD
+                self.ColiderListBuffer.remove(colider)
+                continue
+            if not colider.ColiderChek:
+                continue
+            if obj.Colider.colliderect(colider.Colider):
+                if obj.OnColliderCurrent(colider):
+                    colider.OnColliderCurrent(obj)
                     break
-            for i in rect:
-                    self.objects[i].OnColliderCurrent(obj)  
+                colider.OnColliderCurrent(obj)
+                self.ColiderListBuffer.append(colider)
 
                 
     def Set_DefaultColiderFunc(self):
@@ -340,6 +370,10 @@ class DarkEngineLoop:
         self.TargetColiderFunction=self.ColiderChek_WithoutBuffer
         self.ColiderListBuffer.clear()
     
+    def Set_WithBufferColiderChekOther(self):
+        self.TargetColiderFunction=self.ColiderChek_WithBufferOther
+        self.ColiderListBuffer.clear()
+        
     def run(self):
         self.startScene()  
         for img in self.images:
@@ -360,7 +394,6 @@ class DarkEngineLoop:
                     obj.Update()
                     if obj.ColiderChek: self.TargetColiderFunction(obj)
 
-            
             for event in pg.event.get():
                 if event.type==pg.QUIT:
                     pg.quit() 
