@@ -500,6 +500,7 @@ class GameObject:
         self.ColiderChek=False
         self.Drawing=False
         self.CanGarbage=True
+        self.hasSprite=False
         self.GameObjectName="default object"
         DarkEngine.LoadObject(self)
           
@@ -513,6 +514,7 @@ class GameObject:
         self.Sprite=pg.transform.scale(img,(self.Width,self.Height))
         self.Colider.update(self.Position.x,self.Position.y,self.Sprite.get_width(),self.Sprite.get_height())
         self.Drawing=True
+        self.hasSprite=True
     
     def AddSelfColider(self):
         DarkEngine.LoadColider(self.Colider)
@@ -526,6 +528,7 @@ class GameObject:
         self.Sprite=pg.Surface((self.Width,self.Height))
         self.Colider.update(self.Position.x,self.Position.y,self.Sprite.get_width(),self.Sprite.get_height())
         self.Drawing=True
+        self.hasSprite=True
     
     def Start(self):
         return 
@@ -534,10 +537,13 @@ class GameObject:
         return
     
     def ToWriteFile(self):
-        self.Sprite=pg.surfarray.array3d(self.Sprite)
+        if self.hasSprite:
+            self.Sprite=pg.surfarray.array3d(self.Sprite)
+
         
     def ToReadFile(self):
-        self.Sprite=pg.surfarray.make_surface(self.Sprite)
+        if self.hasSprite:
+            self.Sprite=pg.surfarray.make_surface(self.Sprite)
     
     def MovePosition(self,NewPosition: Vector2):
         self.Position.updateWithVector(NewPosition)
@@ -553,9 +559,7 @@ class GameObject:
             #self.Colider=pg.Rect(self.Position.x,self.Position.y,self.Sprite.get_width(),self.Sprite.get_height())
             self.Colider.update(self.Position.x,self.Position.y,self.Sprite.get_width(),self.Sprite.get_height())
             DarkEngine.window.blit(self.Sprite,(self.Position.x,self.Position.y))
-
-
-                
+               
 
 class DarkEngineLoop:
     
@@ -572,6 +576,7 @@ class DarkEngineLoop:
         self.IsInput=False
         self.InputText=""
         self.Running=True
+        self.Scripts={}
         self.keys=pg.key.get_pressed()
         self.Scences={"Default":[[],[],[]]}
         self.objects=self.Scences["Default"][0]
@@ -591,6 +596,14 @@ class DarkEngineLoop:
         self.coliderList=self.Scences[scene][2]   
         self.targetScene=scene     
     
+    def addScript(self,name,function,enabled):
+        self.Scripts[name]=[function,enabled]
+    
+    def onOffScript(self,name):
+        self.Scripts[name][1]=not self.Scripts[name][1]
+    
+    def removeScript(self,name):
+        del self.Scripts[name]
     
     def ClearColiderBufer(self):
         self.ColiderListBuffer.clear()
@@ -753,7 +766,11 @@ class DarkEngineLoop:
             self.keys=pg.key.get_pressed()
             self.deltaTime=self.Clock.get_time()/100
             self.window.fill((0,0,0))
-                                     
+        
+            for key in self.Scripts:
+                if self.Scripts[key][1]:
+                    self.Scripts[key][0]()
+               
             for imgI in np.arange(len(self.images)):
                 if self.images[imgI].Enabled:
                     self.images[imgI].Update()

@@ -1,8 +1,18 @@
 from Engine.EngineSrc import GameObject,ImageLoader,ImageObject,Vector2,DarkEngine
 import pygame as pg
+import random
 
 imageload=ImageLoader()
 
+
+class Loger(GameObject):
+    
+    def Awake(self):
+        super().Awake()
+        
+    def Update(self):
+        print("loged")
+        super().Update()
 
 class Phone(ImageObject):
     
@@ -12,7 +22,6 @@ class Phone(ImageObject):
         #self.Width*=2
         self.Load_Image(imageload.load("phone2.png"))
         super().Awake()
-    
     
 
 class Player(GameObject):
@@ -76,6 +85,11 @@ class LabBlock(GameObject):
         self.AddSelfColider()
         super().Start()
     
+    def Set_parms(self,w,h,pos):
+        self.Width=w,
+        self.Height=h
+        self.Position=pos
+    
     def colorUpdate(self):
         color_d = self.Position.get_Difference(self.player.Position)
         if color_d > 200:
@@ -87,3 +101,24 @@ class LabBlock(GameObject):
     def Update(self):
         self.colorUpdate()
         super().Update()   
+        
+def gen_lab(rows,columns):
+    chars=['#',"."," "]
+    lab=[]
+    for i in range(rows):
+        lab.append([""])
+        for j in range(columns):
+            if j==0 or j == columns-1 or i==0 or i==rows-1:
+                lab[i][0]+='#'
+                continue
+            lab[i][0]+=random.choice(chars)
+    return lab
+
+def load_lab(lab):
+    w,h=DarkEngine.windowSize[0]/len(lab[0][0]),DarkEngine.windowSize[1]/len(lab)   
+    for row,col in enumerate(lab):
+        for i in range(len(col[0])):
+            if col[0][i]=="#":
+                tmp=LabBlock()
+                tmp.Set_parms(w+1,h+1,Vector2(i*w,row*h))
+
