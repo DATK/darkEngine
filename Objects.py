@@ -5,37 +5,27 @@ import random
 imageload=ImageLoader()
 
 
-class Loger(GameObject):
-    
-    def Awake(self):
-        super().Awake()
-        
-    def Update(self):
-        print("loged")
-        super().Update()
-
 class Phone(ImageObject):
     
-
     def Awake(self):
-        self.Width,self.Height=1280,720
+        self.Width,self.Height=200,200
         #self.Width*=2
         self.Load_Image(imageload.load("phone2.png"))
         super().Awake()
     
-
+    
 class Player(GameObject):
     
     def Awake(self):
         self.Position=Vector2(0,0)
-        self.Width=20
-        self.Height=20
+        self.Width=30
+        self.Height=30
         self.Load_Sprite()
+        #self.Set_Sprite(imageload.load("hero.png",colorkey=[1,(255,255,255)]))
         self.Sprite.fill((255,255,255))
         super().Awake()
     
-    def Start(self):
-        
+    def Start(self):    
         self.AddSelfColider()
         self.CanGarbage=False
         self.inputVector=Vector2(0,0)
@@ -77,18 +67,14 @@ class LabBlock(GameObject):
         self.Sprite.fill((0,200,0))
         super().Awake()
     
+    
     def Start(self):
         for player in DarkEngine.objects:
             if isinstance(player,Player):
                 self.player=player
                 break
         self.AddSelfColider()
-        super().Start()
-    
-    def Set_parms(self,w,h,pos):
-        self.Width=w,
-        self.Height=h
-        self.Position=pos
+        super().Start()    
     
     def colorUpdate(self):
         color_d = self.Position.get_Difference(self.player.Position)
@@ -101,24 +87,3 @@ class LabBlock(GameObject):
     def Update(self):
         self.colorUpdate()
         super().Update()   
-        
-def gen_lab(rows,columns):
-    chars=['#',"."," "]
-    lab=[]
-    for i in range(rows):
-        lab.append([""])
-        for j in range(columns):
-            if j==0 or j == columns-1 or i==0 or i==rows-1:
-                lab[i][0]+='#'
-                continue
-            lab[i][0]+=random.choice(chars)
-    return lab
-
-def load_lab(lab):
-    w,h=DarkEngine.windowSize[0]/len(lab[0][0]),DarkEngine.windowSize[1]/len(lab)   
-    for row,col in enumerate(lab):
-        for i in range(len(col[0])):
-            if col[0][i]=="#":
-                tmp=LabBlock()
-                tmp.Set_parms(w+1,h+1,Vector2(i*w,row*h))
-

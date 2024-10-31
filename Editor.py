@@ -1,5 +1,5 @@
-from Engine.EngineSrc import MapEditor,DarkEngine,Vector2
-from Objects import Player,LabBlock,Phone,Loger,gen_lab
+from Engine.EngineSrc import MapEditor
+from Objects import Player,LabBlock,Phone
 
 editor=MapEditor()
 
@@ -8,8 +8,8 @@ editor.dump(Phone())
 editor.dump(LabBlock())
 
 
-editor.setRes()
-# editor.LoadProject("ProjectScene.pkl")
+editor.setRes((1100,600))
+editor.LoadProject("ProjectScene.scnf")
 
 editor.run() 
 
