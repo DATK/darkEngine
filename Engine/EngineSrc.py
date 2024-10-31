@@ -8,9 +8,12 @@ import os
 import numpy as np
 
 
+
+
 class MapEditor:
     
     def __init__(self,resolutinon=(640,480),flags=pg.DOUBLEBUF):
+        resolutinon=(100+resolutinon[0],180+resolutinon[1])
         self.window = pg.display.set_mode(resolutinon,flags=flags)
         self.Clock=pg.time.Clock()
         self.SceneSurface=pg.Surface((resolutinon[0]*0.6,resolutinon[1]*0.85))
@@ -23,20 +26,23 @@ class MapEditor:
         self.mode=1
         self.New_project=True
         self.running=True
-        self.Scences={"Default": [[],[],[],[],[],[]]}
+        self.Scences={"Default": [[],[],[],[],[],[],[]]}
         self.objects=self.Scences["Default"][0]
         self.images=self.Scences["Default"][1]
         self.dumpObjects=self.Scences["Default"][2]
         self.rects_dmp=self.Scences["Default"][3]
         self.rects_obj=self.Scences["Default"][4]
-        self.rects_scn=self.Scences["Default"][5]
+        self.rects_scn=self.Scences["Default"][5]  
+        self.rects_img=self.Scences["Default"][6]
         self.rects_scns=[]
         self.targetScene="Default"
         self.defaultFont = pg.font.SysFont('Comic Sans MS', 14)
         self.Width,self.Hiegt=self.window.get_size()
+        self.saveFile="ProjectScene.sprj"
         
 
     def setRes(self,resolutinon=(1280,720),flags=pg.DOUBLEBUF):
+        resolutinon=(100+resolutinon[0],180+resolutinon[1])
         self.window = pg.display.set_mode(resolutinon,flags=flags)
         self.SceneSurface=pg.Surface((resolutinon[0]*0.6,resolutinon[1]*0.85))
         self.ObjectsListSurfaces=pg.Surface((resolutinon[0]*0.2,resolutinon[1]*0.85))
@@ -49,6 +55,9 @@ class MapEditor:
             
     def DumpObjectsUpdate(self):
         cords=[5,10]
+        text=self.defaultFont.render("Объекты для добавления",1,(255,20,20))
+        self.ObjectsListToAddSurfaces.blit(text,cords)
+        cords[1]+=18
         for i,obj in enumerate(self.dumpObjects):
             text=self.defaultFont.render(obj.GetName()+str(i+1),1,(0,0,0))
             self.rects_dmp.append((pg.Rect(cords[0],cords[1],text.get_width(),text.get_height()),obj))
@@ -62,18 +71,31 @@ class MapEditor:
         self.rects_dmp=self.Scences["Default"][3]
         self.rects_obj=self.Scences[scene][4]
         self.rects_scn=self.Scences[scene][5]
+        self.rects_img=self.Scences[scene][6]
         self.targetScene=scene
             
     def ListbjectsUpdate(self):
         cords=[5,10]
+        text=self.defaultFont.render("Объекты на сцене",1,(255,20,20))
+        self.ObjectsListSurfaces.blit(text,cords)
+        cords[1]+=18
         for i,obj in enumerate(self.objects):
             text=self.defaultFont.render(obj.GetName()+str(i+1),1,(0,0,0))
             self.rects_obj.append((pg.Rect(cords[0],cords[1],text.get_width(),text.get_height()),obj))
             self.ObjectsListSurfaces.blit(text,cords)
             cords[1]+=18
+        for i,obj in enumerate(self.images):
+            text=self.defaultFont.render(obj.GetName()+str(i+1),1,(0,0,0))
+            self.rects_img.append((pg.Rect(cords[0],cords[1],text.get_width(),text.get_height()),obj))
+            self.ObjectsListSurfaces.blit(text,cords)
+            cords[1]+=18
+            
     
     def ListScencesUpdate(self):
         cords=[5,10]
+        text=self.defaultFont.render("Сцены",1,(255,20,20))
+        self.ScenesListSurface.blit(text,cords)
+        cords[1]+=18
         for key in self.Scences:
             text=self.defaultFont.render(key,1,(0,0,0))
             self.rects_scns.append((pg.Rect(cords[0],cords[1],text.get_width(),text.get_height()),key))
@@ -93,7 +115,7 @@ class MapEditor:
             if rct[0].collidepoint(pos):
                 if rct[1] == "AddScene":
                     newSceneName="Scene" + str(len(self.Scences.keys())+1)
-                    self.Scences[newSceneName]=[[],[],[],[],[],[]]
+                    self.Scences[newSceneName]=[[],[],[],[],[],[],[]]
                     return True
                 self.SetTargetScene(rct[1])
                 return True
@@ -107,6 +129,12 @@ class MapEditor:
                 tmp.Awake()
                 self.addToScene(tmp)
                 return True
+        for rct in self.rects_img:
+            if rct[0].collidepoint(pos):
+                tmp=deepcopy(rct[1])
+                tmp.Awake()
+                self.addToScene(tmp)
+                return True
         return False
             
     def chekObjectsRects(self,pos):
@@ -115,7 +143,6 @@ class MapEditor:
             if rct[0].collidepoint(pos):
                 self.targetObject=rct[1]
                 self.targetColider=rct[0]
-                return True
         return False
     
     
@@ -123,6 +150,7 @@ class MapEditor:
         if target_object:
             if isinstance(target_object,ImageObject):
                 self.images.append(target_object)
+                self.rects_scn.append((pg.Rect(target_object.Position.x/3,target_object.Position.y/4,target_object.Width/3,target_object.Height/4),target_object))
                 return
             self.objects.append(target_object)
             self.rects_scn.append((pg.Rect(target_object.Position.x,target_object.Position.y,target_object.Width,target_object.Height),target_object))
@@ -134,13 +162,14 @@ class MapEditor:
         self.rects_dmp=[]
         self.rects_obj=[]
         self.rects_scn=[]
+        self.rects_img=[]
         with open(file,"rb") as f:
             data_objects=pickle.load(f)
         for key in data_objects:
             for obj in data_objects[key][0]:
-                obj.ToReadFile()
+                obj.ForDeSerialization()
             for img in data_objects[key][1]:
-                img.ToReadFile()
+                img.ForDeSerialization()
         self.Scences=data_objects
         self.SetTargetScene("Default")
         self.New_project=False
@@ -148,16 +177,16 @@ class MapEditor:
     def SaveProject(self,file):
         for key in self.Scences:
             for obj in self.Scences[key][0]:
-                obj.ToWriteFile()
+                obj.ForSerialization()
             for img in self.Scences[key][1]:
-                img.ToWriteFile()
+                img.ForSerialization()
         with open(file,"wb") as f:
             pickle.dump(self.Scences,f)
         for key in self.Scences:
             for obj in self.Scences[key][0]:
-                obj.ToReadFile()
+                obj.ForDeSerialization()
             for img in self.Scences[key][1]:
-                img.ToReadFile()
+                img.ForDeSerialization()
 
     def clsSurfaces(self,*args):
         self.SceneSurface.fill(args[0])
@@ -167,9 +196,13 @@ class MapEditor:
     
     def removeFromScene(self):
         if self.targetObject!=None:
-            self.objects.remove(self.targetObject)
-            self.rects_scn.remove((self.targetColider,self.targetObject))
-    
+            if self.targetObject in self.objects:
+                self.objects.remove(self.targetObject)
+                self.rects_scn.remove((self.targetColider,self.targetObject))
+            else:
+                self.images.remove(self.targetObject)
+                self.rects_scn.remove((self.targetColider,self.targetObject))
+            
     def MoveObject(self):
         if self.targetObject!=None:
             pos=pg.mouse.get_pos()
@@ -216,6 +249,14 @@ class MapEditor:
             self.removeFromScene()
             self.targetObject=None
     
+    def rotateMode(self):
+         if self.targetObject!=None:
+            pos=pg.mouse.get_pos()
+            pos=(pos[0]-self.Width*0.2,pos[1])
+            self.targetObject.Rotate(0.5)
+            self.targetColider.update(self.targetObject.Position.x,self.targetObject.Position.y,self.targetObject.Width,self.targetObject.Height)
+    
+            
     def ObjectDrawer(self):
         for img in self.images:
             if img.Enabled:
@@ -226,6 +267,7 @@ class MapEditor:
                 if obj.Enabled:
                     if obj.Drawing:
                         self.SceneSurface.blit(obj.Sprite,(obj.Position.x,obj.Position.y))
+    
     
     def setEditMode(self):
         keys = pg.key.get_pressed()
@@ -238,25 +280,25 @@ class MapEditor:
         elif keys[pg.K_4]:
             self.mode=4
         if keys[pg.K_5]:
-            print(self.targetScene)
+            self.mode=5
        
             
     def saveProjectForEngine(self):
         for key in self.Scences:
             for obj in self.Scences[key][0]:
-                obj.ToWriteFile()
+                obj.ForSerialization()
             for img in self.Scences[key][1]:
-                img.ToWriteFile()
+                img.ForSerialization()
         scene={}
         for key in self.Scences:
             scene[key]=[self.Scences[key][0],self.Scences[key][1],[]]
-        with open("ToEnineGameData.pkl","wb") as f:
+        with open("ToEnineGameData.engf","wb") as f:
             pickle.dump(scene,f)
         for key in self.Scences:
             for obj in self.Scences[key][0]:
-                obj.ToReadFile()
+                obj.ForDeSerialization()
             for img in self.Scences[key][1]:
-                img.ToReadFile()
+                img.ForDeSerialization()
             
     def run(self):
         self.running=True
@@ -273,7 +315,8 @@ class MapEditor:
                 keys=pg.key.get_pressed()
                 if event.type==pg.QUIT:
                     self.running=False
-                if  event.type==pg.MOUSEBUTTONDOWN: 
+                buttons=pg.mouse.get_pressed()
+                if  event.type==pg.MOUSEBUTTONDOWN and buttons[0]: 
                     pos=pg.mouse.get_pos()
                     if self.chekDumpRects(pos):
                         break
@@ -290,7 +333,7 @@ class MapEditor:
                     print("GameProject Saved")
                 
                 elif keys[pg.K_LCTRL] and keys[pg.K_s] and event.type==pg.KEYDOWN:
-                    self.SaveProject("ProjectScene.pkl")
+                    self.SaveProject("ProjectScene.scnf")
                     print("Project Saved")
                 
                     
@@ -308,6 +351,7 @@ class MapEditor:
             if self. mode == 2: self.reSize()
             if self. mode == 3: self.copyMode()
             if self. mode == 4: self.removeMode()
+            if self. mode == 5: self.rotateMode()
 
             self.window.blit(self.ObjectsListSurfaces,(0,0))
             self.window.blit(self.SceneSurface,(self.Width*0.2,0))
@@ -315,7 +359,8 @@ class MapEditor:
             self.window.blit(self.ScenesListSurface,(0,self.Hiegt*0.85))
             
             self.Clock.tick(self.frames)
-            pg.display.set_caption(f"Editor dev, fps {str(int(self.Clock.get_fps()))}")
+            name = self.targetObject.GetName() if self.targetObject!=None else ""
+            pg.display.set_caption(f"Editor dev, fps {str(int(self.Clock.get_fps()))} | TARGET SCENE {self.targetScene} | TARGET OBJECT {name} | MODE {self.mode}")
             pg.display.flip()
         return self.objects
             
@@ -454,6 +499,7 @@ class ImageObject:
         self.Enabled=True
         self.Drawing=True
         self.ImageName="default image"
+        self.angle=0
         self.Position = Vector2(startPosition[0],startPosition[1])
         DarkEngine.LoadImage(self)
         
@@ -464,14 +510,18 @@ class ImageObject:
         self.Sprite=pg.Surface((self.Width,self.Height))
         self.Sprite.fill(color)
     
-    def ToWriteFile(self):
+    def ForSerialization(self):
         self.Sprite=pg.surfarray.array3d(self.Sprite)
         
-    def ToReadFile(self):
+    def ForDeSerialization(self):
         self.Sprite=pg.surfarray.make_surface(self.Sprite)
     
     def GetName(self):
         return self.ImageName
+    
+    def Rotate(self,angle):
+        self.angle+=angle
+        self.Sprite=pg.transform.rotate(self.Sprite,self.angle)
     
     def Update(self):
         if self.Drawing:
@@ -485,7 +535,6 @@ class ImageObject:
     
     def updateSprite(self):
         self.Sprite=pg.transform.scale(self.Sprite,(self.Width,self.Height))
-        self.Colider.update(self.Position.x,self.Position.y,self.Sprite.get_width(),self.Sprite.get_height())
 
     
 class GameObject:
@@ -495,6 +544,7 @@ class GameObject:
         self.Width=0
         self.Height=0
         self.Enabled=True
+        self.angle=0
         self.Position = Vector2(startPosition[0],startPosition[1])
         self.Colider=pg.Rect(-1000,-1000,-1000,-1000)
         self.ColiderChek=False
@@ -507,9 +557,11 @@ class GameObject:
     def OnGarbage(self):
         return
     
-    def Rotation(self,angle):
-        self.Sprite=pg.transform.rotate(self.Sprite,angle)
-    
+    def Rotate(self,angle):
+        self.angle+=angle
+        self.Sprite=pg.transform.rotate(self.Sprite,self.angle)
+        self.Colider.update(self.Position.x,self.Position.y,self.Sprite.get_width(),self.Sprite.get_height())
+
     def Set_Sprite(self,img):
         self.Sprite=pg.transform.scale(img,(self.Width,self.Height))
         self.Colider.update(self.Position.x,self.Position.y,self.Sprite.get_width(),self.Sprite.get_height())
@@ -536,12 +588,12 @@ class GameObject:
     def Awake(self):
         return
     
-    def ToWriteFile(self):
+    def ForSerialization(self):
         if self.hasSprite:
             self.Sprite=pg.surfarray.array3d(self.Sprite)
 
         
-    def ToReadFile(self):
+    def ForDeSerialization(self):
         if self.hasSprite:
             self.Sprite=pg.surfarray.make_surface(self.Sprite)
     
@@ -740,14 +792,18 @@ class DarkEngineLoop:
         self.ColiderListBuffer=[]
         self.GarbageList=[]
         self.ColiderListBuffer=[]
-        with open(file,"rb") as f:
-            data_objects=pickle.load(f)
+        try:
+            with open(file,"rb") as f:
+                data_objects=pickle.load(f)
+        except Exception as Error:
+            self.LoadScene("Default")
+            return
         for key in data_objects:
             for obj in data_objects[key][0]:
-                obj.ToReadFile()
+                obj.ForDeSerialization()
                 obj.Start()
             for img in data_objects[key][1]:
-                img.ToReadFile()
+                img.ForDeSerialization()
         self.Scences=data_objects
         self.LoadScene("Default")
     
