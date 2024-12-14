@@ -5,6 +5,7 @@ import pickle
 import sys
 import random
 import os
+import threading
 import numpy as np
 
 
@@ -524,8 +525,8 @@ class ImageObject:
         self.Sprite=pg.transform.rotate(self.Sprite,self.angle)
     
     def Update(self):
-        if self.Drawing:
-            DarkEngine.window.blit(self.Sprite,(self.Position.x,self.Position.y))
+        return
+            
     
     def Awake(self):
         return
@@ -607,10 +608,8 @@ class GameObject:
         return self.GameObjectName
     
     def Update(self):
-        if self.Drawing:
-            #self.Colider=pg.Rect(self.Position.x,self.Position.y,self.Sprite.get_width(),self.Sprite.get_height())
-            self.Colider.update(self.Position.x,self.Position.y,self.Sprite.get_width(),self.Sprite.get_height())
-            DarkEngine.window.blit(self.Sprite,(self.Position.x,self.Position.y))
+        return
+            
                
 
 class DarkEngineLoop:
@@ -629,12 +628,14 @@ class DarkEngineLoop:
         self.InputText=""
         self.Running=True
         self.Scripts={}
+        self.barrier=threading.Barrier(3)
         self.keys=pg.key.get_pressed()
         self.Scences={"Default":[[],[],[]]}
         self.objects=self.Scences["Default"][0]
         self.images=self.Scences["Default"][1]
         self.coliderList=self.Scences["Default"][2]
         self.targetScene="Default"
+        self.GarbageLimit = 150
         self.windowSize=self.window.get_size()
         self.defaultFont = pg.font.SysFont('Comic Sans MS', 25)
         self.TargetColiderFunction=self.ColiderChek_WithBufferOther
@@ -669,6 +670,9 @@ class DarkEngineLoop:
     def LoadColider(self,rect):
         self.coliderList.append(rect)
 
+    def setGarbageLimit(self,limit: int):
+        self.GarbageLimit=limit
+
     def Set_icon(self,image):
         pg.display.set_icon(image)
 
@@ -694,8 +698,11 @@ class DarkEngineLoop:
             return True
         if -100<obj.Position.x<self.windowSize[0]+100 and -100<obj.Position.y<self.windowSize[1]+100:
             return True
+        if self.GarbageLimit > 0 and  len(self.GarbageList) > self.GarbageLimit:
+            self.GarbageList.clear()
         self.GarbageList.append(obj)
         self.objects.remove(obj)
+        obj.Enabled=False
         if obj.Colider in self.coliderList:
             self.coliderList.remove(obj.Colider)
         obj.OnGarbage()
@@ -703,12 +710,17 @@ class DarkEngineLoop:
         
     def RemoveFromGarbage(self,obj: GameObject):
         if obj in self.GarbageList:
+            obj.Enabled=True
             self.objects.append(obj)
             if obj.ColiderChek: self.coliderList.append(obj.Colider)
             self.GarbageList.remove(obj)
     
     def AddToGarbage(self,obj):
+        if self.GarbageLimit > 0 and  len(self.GarbageList) > self.GarbageLimit:
+            self.GarbageList.clear()
         self.GarbageList.append(obj)
+        obj.Enabled=False
+        obj.OnGarbage()
         self.objects.remove(obj)
     
     def InputStart(self):
@@ -811,42 +823,79 @@ class DarkEngineLoop:
         self.TargetColiderFunction=self.ColiderChek_WithBufferOther
         self.ColiderListBuffer.clear()
         
+    def renderObjects(self):
+        for obj in self.objects:
+            if obj.Enabled and obj.Drawing and self.GarbageStore(obj):
+                obj.Colider.update(obj.Position.x,obj.Position.y,obj.Sprite.get_width(),obj.Sprite.get_height())
+                self.window.blit(obj.Sprite,(obj.Position.x,obj.Position.y))
+
+    def renderImages(self):
+        for img in self.images:
+            if img.Enabled and img.Drawing:
+                img.Update()
+                self.window.blit(img.Sprite,(img.Position.x,img.Position.y))
+    
+
+    def ThreadUpdateObjects(self):
+        while self.Running:
+            self.barrier.wait()
+            for obj in self.objects:
+                if obj.Enabled:
+                    obj.Update()
+    
+    def ThreadCollidersObjectsHandler(self):
+        while self.Running:
+            self.barrier.wait()
+            for obj in self.objects:
+                if obj.Enabled and obj.ColiderChek:
+                    self.TargetColiderFunction(obj)
+
+    def ThreadScriptsRun(self):
+        while self.Running:
+            for key in self.Scripts:
+                if self.Scripts[key][1]:
+                    self.Scripts[key][0]()
+            pg.time.delay(200)
+
+    def EventHandler(self):
+        for event in pg.event.get():
+            if event.type==pg.QUIT:
+                self.Running = False
+                self.barrier.abort()
+            elif self.InputText:
+                if event.type==pg.KEYDOWN:
+                    self.InputText+=event.unicode
+    
     def run(self):
         self.Running=True
-        self.startScene()  
+        self.startScene() 
+        threads = [threading.Thread(target=self.ThreadUpdateObjects,daemon=True), \
+                                 threading.Thread(target=self.ThreadCollidersObjectsHandler,daemon=True), \
+                                 threading.Thread(target=self.ThreadScriptsRun,daemon=True)] 
         for img in self.images:
             img.Start()
         for obj in self.objects:
             obj.Start()
+        [thread.start() for thread in threads]
         while self.Running:
             self.keys=pg.key.get_pressed()
             self.deltaTime=self.Clock.get_time()/100
             self.window.fill((0,0,0))
-        
-            for key in self.Scripts:
-                if self.Scripts[key][1]:
-                    self.Scripts[key][0]()
-               
-            for imgI in np.arange(len(self.images)):
-                if self.images[imgI].Enabled:
-                    self.images[imgI].Update()
-            
-            for obj in self.objects:
-                if obj.Enabled and self.GarbageStore(obj):
-                    obj.Update()
-                    if obj.ColiderChek: self.TargetColiderFunction(obj)
 
-            for event in pg.event.get():
-                if event.type==pg.QUIT:
-                    self.Running = False
-                elif self.InputText:
-                    if event.type==pg.KEYDOWN:
-                        self.InputText+=event.unicode
-                    
+            self.EventHandler()
+            self.barrier.wait()
+            self.renderImages()
+            self.renderObjects()
+  
+            
             text=self.defaultFont.render(str(int(self.Clock.get_fps())),True,(255,255,255))############# TMP ПОТОМ УДАЛИТЬ
-            self.window.blit(text,(0,0))                                                   ############# TMP ПОТОМ УДАЛИТЬ
+            self.window.blit(text,(0,0))   
+                                                            ############# TMP ПОТОМ УДАЛИТЬ
+            
+
             self.Clock.tick(self.fps_max)
             pg.display.update(pg.Rect(0,0,self.window.get_width(),self.window.get_height()))
+        [thread.join() for thread in threads]
         sys.exit()
 
 DarkEngine = DarkEngineLoop()
