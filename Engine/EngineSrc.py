@@ -6,7 +6,7 @@ import sys
 import random
 import os
 import threading
-import numpy as np
+
 
 
 
@@ -365,7 +365,25 @@ class MapEditor:
             pg.display.flip()
         return self.objects
             
+class Sound:
+
+    def __init__(self,filename):
+        '''Only .ogg or .wav sounds'''       
+        self.sound = pg.mixer.Sound(filename)
+
+    def play(self):
+        self.sound.play()
+
+    def change_volume(self,value):
+        self.sound.set_volume(value)
+
+    def get_info(self):
+        return (self.sound.get_length(),self.sound.get_volume(),self.sound.get_num_channels(),self.sound.get_raw())
+
+    def stop(self):
+        self.sound.stop()
     
+
 class ImageLoader:
     
     def __init__(self):
@@ -615,8 +633,9 @@ class GameObject:
 class DarkEngineLoop:
     
     def __init__(self):
+        pg.mixer.pre_init(44100, -16, 1, 512)
         pg.init()
-        self.flags = pg.DOUBLEBUF 
+        self.flags = pg.DOUBLEBUF | pg.HWSURFACE
         self.window = pg.display.set_mode((1280,720),self.flags)
         self.Clock = pg.time.Clock()
         self.fps_max=240
@@ -684,7 +703,7 @@ class DarkEngineLoop:
     
     def Set_resolution(self,res,fullsceen=False):
         if fullsceen:
-            self.flags = pg.FULLSCREEN | pg.DOUBLEBUF
+            self.flags = pg.FULLSCREEN | pg.DOUBLEBUF | pg.HWSURFACE
         self.window=pg.display.set_mode(res,self.flags)
         self.windowSize=self.window.get_size()
     

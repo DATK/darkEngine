@@ -1,22 +1,8 @@
 import pygame as pg
 import random
 import numpy as np
-from Engine.EngineSrc import DarkEngine,GameObject,Vector2,ImageLoader,ImageObject
+from Engine.EngineSrc import DarkEngine,GameObject,Vector2,ImageLoader,ImageObject,Sound
 
-class Loger(GameObject):
-    
-    def Start(self):
-        super().Start()
-        
-    def Update(self):
-        #print(len(DarkEngine.objects))
-        super().Update()
-        
-    def OnColliderCurrent(self, object):
-        #print(object)
-        super().OnColliderCurrent(object)
-
-a=Loger((100,100))
 class Player(GameObject):
     
     def Start(self):
@@ -108,6 +94,8 @@ class Enemy(GameObject):
         self.Set_Sprite(imageload.load("enemy2.png",colorkey=[1,(255,255,255)]))
         self.AddSelfColider()
         self.CanGarbage=False
+        self.sound = Sound("polet.ogg")
+        self.played=False
         return super().Start()
     
     def gen_point(self):
@@ -119,7 +107,7 @@ class Enemy(GameObject):
 
     
     def randomMov(self):
-        self.MovePosition(self.Position+self.dif*(self.speed*DarkEngine.deltaTime))
+        self.MovePosition(self.Position-self.dif*(self.speed*DarkEngine.deltaTime))
         if self.Position==self.target:
             self.speed=0
             self.gen_point()
@@ -136,6 +124,14 @@ class Enemy(GameObject):
         if self.hp<0:
             self.Enabled=False
         #print(self.hp)  
+        if self.Position.get_Difference(player.Position)<10:
+            self.sound.play()
+            self.played=True
+        # if self.played and self.Position.get_Difference(player.Position)>14:
+        #     self.sound.stop()
+        #     self.played=False
+        
+
         super().Update()
         
     def OnColliderCurrent(self, object):
@@ -152,6 +148,7 @@ class Weapon(GameObject):
         self.Position=self.obj.Position
         self.CanGarbage=True
         self.schet=0
+        self.sound = Sound("shoot.ogg")
                          
         return super().Start()
 
@@ -160,20 +157,19 @@ class Weapon(GameObject):
         self.speed=speed
         self.rasbros=rasbros
         self.damage=damage
-        self.maxCount=20
-        self.count=10
-    
+        self.maxCount=2000
+        self.count=1
+
+
     def shoot(self):
-        if DarkEngine.keys[pg.K_SPACE] and self.schet>self.maxCount:
-            bulet=Bullet((self.Position.x,self.Position.y),self.speed,self.rasbros,self.damage,self.drc)
-            bulet.init()
-            self.schet=0
-        elif isinstance(self.obj,Enemy) and self.schet>self.maxCount:
-            bulet=Bullet((self.Position.x,self.Position.y),self.speed,self.rasbros,self.damage,self.drc)
-            bulet.init()
-            self.schet=0
-        
-        self.schet+=self.count
+        if DarkEngine.keys[pg.K_SPACE]:
+            self.schet+=self.count*DarkEngine.deltaTime
+            if self.schet>self.maxCount:
+                bulet=Bullet((self.Position.x,self.Position.y),self.speed,self.rasbros,self.damage,self.drc)
+                bulet.init()
+                self.sound.play()
+                self.schet=0
+
     
     
     def update_positon(self):
@@ -215,8 +211,6 @@ class Bullet(GameObject):
         if isinstance(object,Enemy):
             object.hp-=self.damage
             pass
-        if isinstance(object, (Loger,Weapon)):
-            pass
         super().OnColliderCurrent(object)
         return False
     
@@ -243,10 +237,10 @@ phone2=Phone((DarkEngine.windowSize[0],0))
 #     w.maxCount=150
 
 
-[Enemy() for i in np.arange(100)]
+[Enemy() for i in np.arange(2)]
 
-DarkEngine.Set_frame(60)
-
+DarkEngine.Set_frame(100)
+DarkEngine.Set_WithBufferColiderChekOther()
                                                                                                              
 
 DarkEngine.run()
