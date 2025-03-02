@@ -10,7 +10,6 @@ import threading
 
 
 
-
 class MapEditor:
     
     def __init__(self,resolutinon=(640,480),flags=pg.DOUBLEBUF):
@@ -410,7 +409,33 @@ class ImageLoader:
             image=None
         return image
 
+class Animation:      ####   НЕ  ГОТОВ ################################################### anim
 
+    def __init__(self,objSelf):
+        self.animationList = []
+        self.run=False
+        self.delayTime = 50
+        self.objSelf=objSelf
+
+    def loadSpriteList(self,name: str,sprites: list[str]):
+        self.animationList.extend(sprites)
+
+    def play(self):
+        thread=threading.Thread(target=self._play)
+
+
+    def _play(self):
+        while self.run:
+            for sprite in self.animationList:
+                self.objSelf.Sprite=sprite
+                self.objSelf.updateSprite
+                pg.time.delay(self.delayTime)
+
+
+    def playStop(self):
+        self.run=not self.run
+
+        
 
 class Vector2:
     
@@ -433,7 +458,7 @@ class Vector2:
     def nulling(self):
         self.x,self.y=0,0
     
-    @property
+    @classmethod
     def GetRandomVector(xy_lim=(0,0,1000,1000)):
         x=random.randint(xy_lim[0],xy_lim[2])
         y=random.randint(xy_lim[1],xy_lim[3])
@@ -509,6 +534,45 @@ class Vector2:
     def __str__(self):
         return f"({round(self.x,2)},{round(self.y,2)})"
     
+class TextBox:
+
+    def __init__(self,startPosition=Vector2(0,0),text="TextBox", aligin = "center",size=(5,5),font = 'Comic Sans MS',fontSize = 20, textColor = (255,0,0), alpha = 255,backColor=(0,0,0), delPhone=True):
+        self.Width,self.Height=size
+        self.surf = pg.Surface((self.Width,self.Height))
+        self.Enabled=True
+        self.colorSurf=backColor
+        self.fontSize=fontSize
+        self.Position = startPosition
+        self.alpha=alpha
+        self.text = text
+        self.align = aligin
+        self.font = pg.font.SysFont(font, self.fontSize)
+        self.color = textColor
+        self.surf.set_alpha(self.alpha)
+        self.surf.fill(self.colorSurf)
+        if delPhone:
+            self.surf.set_colorkey(self.colorSurf)
+        DarkEngine.LoadTextBox(self)
+    
+
+    def Start(self):
+        self.render()
+        return
+    
+    def LoadBack(self,image):
+        self.surf= image
+    
+    def render(self):
+        self.surf.fill(self.colorSurf)
+        renderText = self.font.render(self.text,True,self.color)
+        if self.align == "center":
+            self.surf.blit(renderText,(self.Width/2-renderText.get_width()/2,self.Height/2-renderText.get_height()/2))
+        elif self.align == "right":
+            self.surf.blit(renderText,(self.Width-renderText.get_width(),self.Height/2-renderText.get_height()/2))
+        elif self.align=="left":
+            self.surf.blit(renderText,(0,self.Height/2-renderText.get_height()/2))
+
+
 
 class ImageObject:
     
@@ -627,7 +691,6 @@ class GameObject:
     
     def Update(self):
         return
-            
                
 
 class DarkEngineLoop:
@@ -649,28 +712,31 @@ class DarkEngineLoop:
         self.Scripts={}
         self.barrier=threading.Barrier(3)
         self.keys=pg.key.get_pressed()
-        self.Scences={"Default":[[],[],[]]}
+        self.Scences={"Default":[[],[],[],[]]}
         self.objects=self.Scences["Default"][0]
         self.images=self.Scences["Default"][1]
         self.coliderList=self.Scences["Default"][2]
+        self.textBoxes=self.Scences["Default"][3]
         self.targetScene="Default"
         self.GarbageLimit = 150
+        self.scriptPauseTime=200
         self.windowSize=self.window.get_size()
         self.defaultFont = pg.font.SysFont('Comic Sans MS', 25)
         self.TargetColiderFunction=self.ColiderChek_WithBufferOther
         
     def ClearGarbage(self):
-        self.GarbageList.clear()
-        
+        self.GarbageList.clear()        #self.txt.DeleteColorBack()
+    
     def LoadScene(self,scene):
         self.objects=self.Scences[scene][0]
         self.images=self.Scences[scene][1]
         self.coliderList=self.Scences[scene][2]   
-        self.targetScene=scene     
-    
+        self.textBoxes=self.Scences[scene][3]
+        self.targetScene=scene  
+
     def addScript(self,name,function,enabled):
         self.Scripts[name]=[function,enabled]
-    
+
     def onOffScript(self,name):
         self.Scripts[name][1]=not self.Scripts[name][1]
     
@@ -682,6 +748,9 @@ class DarkEngineLoop:
         
     def LoadObject(self,obj: object):
         self.objects.append(obj)
+
+    def LoadTextBox(self,textBox: TextBox):
+        self.textBoxes.append(textBox)
 
     def LoadImage(self,img):
         self.images.append(img)
@@ -817,30 +886,11 @@ class DarkEngineLoop:
         self.ColiderListBuffer.clear()
     
     
-    def LoadSceneFromEditor(self,file):
-        self.objects=[]
-        self.coliderList=[]
-        self.ColiderListBuffer=[]
-        self.GarbageList=[]
-        self.ColiderListBuffer=[]
-        try:
-            with open(file,"rb") as f:
-                data_objects=pickle.load(f)
-        except Exception as Error:
-            self.LoadScene("Default")
-            return
-        for key in data_objects:
-            for obj in data_objects[key][0]:
-                obj.ForDeSerialization()
-                obj.Start()
-            for img in data_objects[key][1]:
-                img.ForDeSerialization()
-        self.Scences=data_objects
-        self.LoadScene("Default")
-    
+   
     def Set_WithBufferColiderChekOther(self):
         self.TargetColiderFunction=self.ColiderChek_WithBufferOther
         self.ColiderListBuffer.clear()
+
         
     def renderObjects(self):
         for obj in self.objects:
@@ -854,6 +904,10 @@ class DarkEngineLoop:
                 img.Update()
                 self.window.blit(img.Sprite,(img.Position.x,img.Position.y))
     
+    def renderTextBoxes(self):
+        for txtBox in self.textBoxes:
+            if txtBox.Enabled:
+                self.window.blit(txtBox.surf,(txtBox.Position.x,txtBox.Position.y))
 
     def ThreadUpdateObjects(self):
         while self.Running:
@@ -873,17 +927,25 @@ class DarkEngineLoop:
         while self.Running:
             for key in self.Scripts:
                 if self.Scripts[key][1]:
-                    self.Scripts[key][0]()
-            pg.time.delay(200)
+                    try:
+                        self.Scripts[key][0]()
+                    except Exception as ex:
+                        print(f"Script {key} has Exception as {ex}")
+            pg.time.delay(self.scriptPauseTime)
 
     def EventHandler(self):
         for event in pg.event.get():
             if event.type==pg.QUIT:
                 self.Running = False
                 self.barrier.abort()
-            elif self.InputText:
-                if event.type==pg.KEYDOWN:
-                    self.InputText+=event.unicode
+            elif self.IsInput and event.type==pg.KEYDOWN:
+
+                if pg.key.get_pressed()[pg.K_BACKSPACE]:
+                    self.InputDelLast()
+                    continue
+                elif pg.key.get_pressed()[pg.K_RETURN]:
+                    continue
+                self.InputText+=event.unicode
     
     def run(self):
         self.Running=True
@@ -895,7 +957,11 @@ class DarkEngineLoop:
             img.Start()
         for obj in self.objects:
             obj.Start()
+        for txtb in self.textBoxes:
+            txtb.Start()
+
         [thread.start() for thread in threads]
+
         while self.Running:
             self.keys=pg.key.get_pressed()
             self.deltaTime=self.Clock.get_time()/100
@@ -905,6 +971,7 @@ class DarkEngineLoop:
             self.barrier.wait()
             self.renderImages()
             self.renderObjects()
+            self.renderTextBoxes()
   
             
             text=self.defaultFont.render(str(int(self.Clock.get_fps())),True,(255,255,255))############# TMP ПОТОМ УДАЛИТЬ
