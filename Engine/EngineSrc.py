@@ -458,7 +458,7 @@ class Vector2:
     def nulling(self):
         self.x,self.y=0,0
     
-    @classmethod
+    @staticmethod
     def GetRandomVector(xy_lim=(0,0,1000,1000)):
         x=random.randint(xy_lim[0],xy_lim[2])
         y=random.randint(xy_lim[1],xy_lim[3])
@@ -691,7 +691,8 @@ class GameObject:
     
     def Update(self):
         return
-               
+
+
 
 class DarkEngineLoop:
     
@@ -983,5 +984,6 @@ class DarkEngineLoop:
             pg.display.update(pg.Rect(0,0,self.window.get_width(),self.window.get_height()))
         [thread.join() for thread in threads]
         sys.exit()
+
 
 DarkEngine = DarkEngineLoop()
