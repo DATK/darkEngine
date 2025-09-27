@@ -6,7 +6,9 @@ import sys
 import random
 import os
 import threading
+import numba
 import Engine.EventListInfo as EventListInfo
+from typing import Optional, List, Tuple
 
 class MapEditorObjectsBuffer():
 
@@ -462,12 +464,19 @@ class Vector2:
         self.x=x
         self.y=y
         
-    def normalise(self):
+    def normalize(self):
         if self.x != 0 or self.y !=0:
             inv_length = 1/(math.sqrt((self.x**2+self.y**2)))
             self.x *= inv_length
             self.y *= inv_length
-            
+
+    def normalized(self):
+        if self.x != 0 or self.y !=0:
+            inv_length = 1/(math.sqrt((self.x**2+self.y**2)))
+            self.x *= inv_length
+            self.y *= inv_length
+        return Vector2(self.x,self.y)
+    
     def getRandomDir(self):
         tmpX=random.randint(1,10)/10
         tmpY=random.randint(1,10)/10
@@ -519,6 +528,15 @@ class Vector2:
         else:
             raise ArithmeticError("Правый операнд должен быть числом или Vector2")
     
+    def dot(self, o):
+        return self.x * o.x + self.y * o.y
+
+    def cross(self, o):
+        return self.x * o.y - self.y * o.x
+
+    def length(self):
+        return math.hypot(self.x, self.y)
+
     def __mul__(self,other):
         if isinstance(other,Vector2):
             x=self.x*other.x
@@ -530,6 +548,8 @@ class Vector2:
             return Vector2(x,y)
         else:
             raise ArithmeticError("Правый операнд должен быть числом или Vector2")
+        
+    __rmul__ = __mul__
     
     def __div__(self,other):
         if isinstance(other,Vector2):
@@ -675,7 +695,7 @@ class GameObject:
         self.updateSprite()
 
     def Rotate(self,angle):
-        self.angle+=angle
+        self.angle=angle
 
 
     def Set_Sprite(self,img):
@@ -776,6 +796,191 @@ class Event():
         return EventListInfo.evnts
 
 
+class RectangleShape:
+    def __init__(self, hx, hy):
+        self.hx = hx  # половина ширины
+        self.hy = hy  # половина высоты
+
+    @property
+    def inertia(self):
+        return ((self.hx*2)**2 + (self.hy*2)**2) / 12.0
+
+    def get_vertices_world(self, pos, angle):
+        cos_a = math.cos(angle)
+        sin_a = math.sin(angle)
+        pts = [Vector2(-self.hx, -self.hy), Vector2(self.hx, -self.hy),
+               Vector2(self.hx, self.hy), Vector2(-self.hx, self.hy)]
+        world_pts = []
+        for p in pts:
+            x = cos_a * p.x - sin_a * p.y + pos.x
+            y = sin_a * p.x + cos_a * p.y + pos.y
+            world_pts.append(Vector2(x, y))
+        return world_pts
+    
+def get_center_from_vertices(verts):
+    sum_x = sum(v.x for v in verts)
+    sum_y = sum(v.y for v in verts)
+    n = len(verts)
+    return Vector2(sum_x / n, sum_y / n)
+
+
+
+class PhysicBody2D:
+    def __init__(self, shape: RectangleShape, mass: float, Position: Vector2, angle=0.0, e=0.3):
+        self.shape = shape
+        self.Position = Position
+        self.angle = angle
+        self.vel = Vector2(0, 0)
+        self.omega = 0.0
+        self.mass = mass
+        self.inv_mass = 0 if mass == 0 else 1 / mass
+        self.I = shape.inertia * mass
+        self.inv_I = 0 if self.I == 0 else 1 / self.I
+        self.e = e
+        self.on_ground = False
+        self.Pivot: Optional[Vector2] = None
+        self.supported = False
+        PhysicsEngine.add_body(self)
+
+    
+def project_polygon(axis, verts):
+    dots = [v.dot(axis) for v in verts]
+    return min(dots), max(dots)
+
+def overlap_intervals(a_min, a_max, b_min, b_max):
+    return min(a_max, b_max) - max(a_min, b_min)
+
+def sat_collision(a, b):
+    verts_a = a.shape.get_vertices_world(a.Position, a.angle)
+    verts_b = b.shape.get_vertices_world(b.Position, b.angle)
+    axes = []
+    for verts in [verts_a, verts_b]:
+        for i in range(4):
+            p1 = verts[i]
+            p2 = verts[(i+1)%4]
+            edge = p2 - p1
+            normal = Vector2(-edge.y, edge.x)
+            n_len = normal.length()
+            if n_len > 0:
+                normal = Vector2(normal.x/n_len, normal.y/n_len)
+            axes.append(normal)
+    min_overlap = float('inf')
+    smallest_axis = None
+    for axis in axes:
+        min_a, max_a = project_polygon(axis, verts_a)
+        min_b, max_b = project_polygon(axis, verts_b)
+        o = overlap_intervals(min_a, max_a, min_b, max_b)
+        if o <= 0:
+            return None
+        if o < min_overlap:
+            min_overlap = o
+            smallest_axis = axis
+    d = a.Position - b.Position
+    if d.dot(smallest_axis) < 0:
+        smallest_axis = smallest_axis * -1
+    return smallest_axis, min_overlap
+
+
+class PhysicEngine:
+    def __init__(self, gravity=500.0, window_size=(800,600)):
+        self.bodies = []
+        self.gravity = gravity
+        self.mu_s = 0.5
+        self.mu_k = 0.3
+        self.dt = 1/60.0
+        self.window_size = window_size
+
+    def add_body(self, body):
+        self.bodies.append(body)
+
+    def PhysicsUpdate(self):
+        while True:
+            self.dt = DarkEngine.deltaTime
+            self.window_size = DarkEngine.windowSize
+            self.apply_gravity()
+            contacts = self.detect_collisions()
+            self.resolve_collisions(contacts)
+            self.integrate()
+            DarkEngine.barrier.wait()
+        
+
+    def apply_gravity(self):
+        for b in self.bodies:
+            if b.inv_mass != 0:
+                b.vel.y += self.gravity * self.dt
+
+
+    def detect_collisions(self):
+        contacts = []
+        n = len(self.bodies)
+        for i in range(n):
+            for j in range(i+1, n):
+                a = self.bodies[i]
+                b = self.bodies[j]
+                res = sat_collision(a,b)
+                if res:
+                    normal, depth = res
+                    contacts.append((a,b,normal,depth))
+        return contacts
+
+    def resolve_collisions(self, contacts):
+        for a,b,norm,depth in contacts:
+            # коррекция позиции
+            a.Position += norm * (depth/2)
+            b.Position -= norm * (depth/2)
+            # импульс
+            ra = Vector2(0,0)
+            rb = Vector2(0,0)
+            rv = (a.vel + Vector2(-a.omega*ra.y, a.omega*ra.x)) - (b.vel + Vector2(-b.omega*rb.y, b.omega*rb.x))
+            vel_along_norm = rv.dot(norm)
+            if vel_along_norm > 0:
+                continue
+            e = min(a.e,b.e)
+            j = -(1+e)*vel_along_norm
+            j /= a.inv_mass + b.inv_mass
+            impulse = norm * j
+            a.vel += impulse * a.inv_mass
+            b.vel -= impulse * b.inv_mass
+            # трение
+            rv = (a.vel + Vector2(-a.omega*ra.y, a.omega*ra.x)) - (b.vel + Vector2(-b.omega*rb.y, b.omega*rb.x))
+            tangent = rv - norm*(rv.dot(norm))
+            if tangent.length() > 0.0001:
+                tangent = tangent.normalized()
+                jt = -rv.dot(tangent)
+                jt /= a.inv_mass + b.inv_mass
+                jt = max(-self.mu_k*j, min(self.mu_k*j, jt))
+                friction_impulse = tangent * jt
+                a.vel += friction_impulse * a.inv_mass
+                b.vel -= friction_impulse * b.inv_mass
+
+    def integrate(self):
+        for b in self.bodies:
+            b.Position += b.vel * self.dt
+            b.angle += b.omega * self.dt
+            # границы окна
+            left = b.Position.x - b.shape.hx
+            right = b.Position.x + b.shape.hx
+            bottom = b.Position.y + b.shape.hy
+            top = b.Position.y - b.shape.hy
+            if bottom > self.window_size[1]:
+                b.Position.y = self.window_size[1] - b.shape.hy
+                b.vel.y *= -b.e
+                b.vel.x *= 1-self.mu_k
+                b.omega *= 1-self.mu_k
+            if top < 0:
+                b.Position.y = b.shape.hy
+                b.vel.y *= -b.e
+            if left < 0:
+                b.Position.x = b.shape.hx
+                b.vel.x *= -b.e
+            if right > self.window_size[0]:
+                b.Position.x = self.window_size[0]-b.shape.hx
+                b.vel.x *= -b.e
+                pos = b.shape.get_center_from_vertices(b.shape.get_vertices_world(b.Position,b.angle))
+                self.Position.x,self.Position.y = pos.x, pos.y
+
+ 
+
 
 class DarkEngineLoop:
     
@@ -794,7 +999,7 @@ class DarkEngineLoop:
         self.InputText=""
         self.Running=True
         self.Scripts={}
-        self.barrier=threading.Barrier(3)
+        self.barrier=threading.Barrier(4)
         self.keys=pg.key.get_pressed()
         self.Scences={}
         self.AddScene("Default")
@@ -806,7 +1011,10 @@ class DarkEngineLoop:
         self.TargetColiderFunction=self.ColiderChek_WithBufferOther
         self.customeventsKoef = 1
         self.eventList=[]
+
         
+    
+
 
     
     def basicEvents(self):
@@ -880,6 +1088,7 @@ class DarkEngineLoop:
         self.flags=flags
         self.window=pg.display.set_mode(res,self.flags)
         self.windowSize=self.window.get_size()
+        self.physicsEngine = PhysicEngine(self.window)
     
     def ExitEvent(self):
         self.Running = False
@@ -1018,7 +1227,7 @@ class DarkEngineLoop:
     def renderObjects(self):
         for obj in self.objects:
             if obj.Enabled and obj.Drawing and self.GarbageStore(obj):
-                sprite = pg.transform.rotate(obj.Sprite,obj.angle)
+                sprite = pg.transform.rotate(obj.Sprite,-math.degrees(obj.angle))
                 obj.Colider.update(obj.Sprite.get_rect(center=(obj.Position.x,obj.Position.y)))
                 rect = sprite.get_rect(center = obj.Colider.center)
                 #pg.draw.rect(self.window,(250,25,123),obj.s)
@@ -1087,22 +1296,29 @@ class DarkEngineLoop:
         self.Running=True
         self.NextScene=self.targetScene
         self.startScene() 
-        threads = [threading.Thread(target=self.ThreadUpdateObjects,daemon=True), \
-                                 threading.Thread(target=self.ThreadCollidersObjectsHandler,daemon=True), \
-                                 threading.Thread(target=self.ThreadScriptsRun,daemon=True)] 
+        threads = [ threading.Thread(target=self.ThreadUpdateObjects,daemon=True), \
+                    threading.Thread(target=self.ThreadCollidersObjectsHandler,daemon=True), \
+                    threading.Thread(target=self.ThreadScriptsRun,daemon=True), \
+                    threading.Thread(target=PhysicsEngine.PhysicsUpdate,daemon=True) ] 
        
+        
+        
 
-        [thread.start() for thread in threads]
+
+
 
         self.InitialiesObject()
 
         self.basicEvents()
+
+        [thread.start() for thread in threads]
 
         while self.Running:
             self.InitialiesObject()
             self.keys=pg.key.get_pressed()
            # self.deltaTime=self.Clock.get_time()/10
             self.window.fill((0,0,0))
+
 
             self.EventHandler()
             self.barrier.wait()
@@ -1116,10 +1332,10 @@ class DarkEngineLoop:
                                                             ############# TMP ПОТОМ УДАЛИТЬ
             
 
-            self.deltaTime  = self.Clock.tick(self.fps_max) * 0.1
+            self.deltaTime  = self.Clock.tick(self.fps_max) / 1000
             pg.display.update(pg.Rect(0,0,self.window.get_width(),self.window.get_height()))
         [thread.join() for thread in threads]
         sys.exit()
 
-
+PhysicsEngine = PhysicEngine()
 DarkEngine = DarkEngineLoop()

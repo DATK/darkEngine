@@ -1,0 +1,6 @@
+RESOLUTION = (1280,720)
+FULLSCREEN = False
+
+FRAME = 60
+
+CAPTION = "alpha 0.0.1"
